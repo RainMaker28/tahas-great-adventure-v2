@@ -5,20 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Taha's Great Adventure</title>
     <style>
-    body {
-        margin: 0;
-        overflow: hidden;
-        background-color: #202020;
-        font-family: 'Courier New', Courier, monospace;
-        touch-action: none; /* Prevent browser zooming/scrolling */
-        user-select: none;
-        -webkit-user-select: none;
-    }
-    #gameCanvas {
-        display: block;
-        margin: 0 auto;
-        background-color: #87CEEB;
-    }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #202020;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none; /* Prevent browser zooming/scrolling */
+            user-select: none;
+            -webkit-user-select: none;
+        }
         #gameCanvas {
             display: block;
             margin: 0 auto;
@@ -76,7 +71,7 @@
 (function() {
 /**
  * TAHA'S GREAT ADVENTURE
- * v2.1 - High Fidelity + Detailed Backgrounds
+ * v2.2 - Raised Floor + Fewer Enemies
  */
 
 // --- CONFIGURATION ---
@@ -85,6 +80,7 @@ const FRICTION = 0.8;
 const MOVE_SPEED = 5;
 const JUMP_FORCE = 13;
 const BOSS_JUMP_FORCE = 16;
+const FLOOR_OFFSET = 160; // Raises the floor 160px from bottom to clear thumbs
 
 // --- ASSETS & PALETTES ---
 const LEVELS = [
@@ -262,6 +258,8 @@ function drawBackground(levelIdx, camX) {
     const config = LEVELS[levelIdx];
     const mon = config.monument;
     const bg = config.bgFeature;
+    // Shift background up to account for raised floor
+    const Y_SHIFT = 100; 
 
     // --- Layer 1: Far Background (Slowest Parallax factor 0.1) ---
     ctx.save();
@@ -270,11 +268,11 @@ function drawBackground(levelIdx, camX) {
     if (bg === 'dunes') { // Libya
         ctx.fillStyle = "#D4B450";
         ctx.beginPath();
-        ctx.moveTo(bxFar - w, h-150);
+        ctx.moveTo(bxFar - w, h-150-Y_SHIFT);
         for(let i=0; i<3; i++) {
             let startX = bxFar + (i*w) - w;
-            ctx.quadraticCurveTo(startX + w/4, h-250, startX + w/2, h-180);
-            ctx.quadraticCurveTo(startX + w*3/4, h-220, startX + w, h-150);
+            ctx.quadraticCurveTo(startX + w/4, h-250-Y_SHIFT, startX + w/2, h-180-Y_SHIFT);
+            ctx.quadraticCurveTo(startX + w*3/4, h-220-Y_SHIFT, startX + w, h-150-Y_SHIFT);
         }
         ctx.lineTo(bxFar + 2*w, h); ctx.lineTo(bxFar - w, h); ctx.fill();
     } else if (bg === 'hills' || bg === 'clouds' || bg === 'rainclouds') {
@@ -286,7 +284,8 @@ function drawBackground(levelIdx, camX) {
             let startX = bxFar + (i*w) - w;
             ctx.beginPath();
             if(bg==='hills') {
-                 ctx.moveTo(startX, h-100); ctx.quadraticCurveTo(startX+w/2, h-300, startX+w, h-100);
+                 ctx.moveTo(startX, h-100-Y_SHIFT); ctx.quadraticCurveTo(startX+w/2, h-300-Y_SHIFT, startX+w, h-100-Y_SHIFT);
+                 ctx.lineTo(startX+w, h); ctx.lineTo(startX, h); // Fill down
             } else {
                  // Clouds
                  ctx.arc(startX+100, 100, 50, 0, Math.PI*2);
@@ -306,45 +305,47 @@ function drawBackground(levelIdx, camX) {
         // Don't draw if far offscreen
         if (bx < -400 || bx > w) continue;
 
+        let baseH = h - Y_SHIFT;
+
         if (mon === 'arch') { // Libya Arch (Marcus Aurelius style)
             ctx.fillStyle = "#C2B280"; // Sandstone
-            ctx.fillRect(bx + 100, h - 350, 200, 250); // Main block
+            ctx.fillRect(bx + 100, baseH - 350, 200, 250); // Main block
             ctx.fillStyle = "#A89A70"; // Darker details
-            ctx.fillRect(bx + 120, h - 350, 20, 250); // Pillar left
-            ctx.fillRect(bx + 260, h - 350, 20, 250); // Pillar right
+            ctx.fillRect(bx + 120, baseH - 350, 20, 250); // Pillar left
+            ctx.fillRect(bx + 260, baseH - 350, 20, 250); // Pillar right
             ctx.fillStyle = config.sky; // Clear archway
-            ctx.beginPath(); ctx.arc(bx + 200, h - 150, 60, Math.PI, 0); ctx.fill();
+            ctx.beginPath(); ctx.arc(bx + 200, baseH - 150, 60, Math.PI, 0); ctx.fill();
         } else if (mon === 'tower') { // Pisa
             ctx.fillStyle = "#EEE"; // Marble
             ctx.beginPath();
-            ctx.moveTo(bx + 150, h-100); ctx.lineTo(bx + 180, h-450); // Leaning Left side
-            ctx.lineTo(bx + 260, h-450); // Top
-            ctx.lineTo(bx + 230, h-100); // Leaning Right side
+            ctx.moveTo(bx + 150, baseH-100); ctx.lineTo(bx + 180, baseH-450); // Leaning Left side
+            ctx.lineTo(bx + 260, baseH-450); // Top
+            ctx.lineTo(bx + 230, baseH-100); // Leaning Right side
             ctx.fill();
             // Tiers
             ctx.strokeStyle = "#CCC"; ctx.lineWidth = 2;
             for(let j=1; j<7; j++) {
-                let y = h - 100 - (j*50);
+                let y = baseH - 100 - (j*50);
                 let leanOffset = j*4.5;
                 ctx.beginPath(); ctx.moveTo(bx+150+leanOffset, y); ctx.lineTo(bx+230+leanOffset, y); ctx.stroke();
             }
         } else if (mon === 'eiffel') { // Paris
             ctx.fillStyle = "#555"; // Iron Grey
             ctx.beginPath();
-            ctx.moveTo(bx + 100, h-100); ctx.lineTo(bx + 200, h-500); ctx.lineTo(bx + 300, h-100); // Main spire
+            ctx.moveTo(bx + 100, baseH-100); ctx.lineTo(bx + 200, baseH-500); ctx.lineTo(bx + 300, baseH-100); // Main spire
             ctx.fill();
             ctx.fillStyle = "#444"; // Darker cross beams
-            ctx.fillRect(bx + 160, h-250, 80, 10);
-            ctx.fillRect(bx + 185, h-400, 30, 8);
-            ctx.beginPath(); ctx.moveTo(bx+130, h-100); ctx.quadraticCurveTo(bx+200, h-200, bx+270, h-100); ctx.fill(); // Base arch base
+            ctx.fillRect(bx + 160, baseH-250, 80, 10);
+            ctx.fillRect(bx + 185, baseH-400, 30, 8);
+            ctx.beginPath(); ctx.moveTo(bx+130, baseH-100); ctx.quadraticCurveTo(bx+200, baseH-200, bx+270, baseH-100); ctx.fill(); // Base arch base
         } else if (mon === 'ben') { // UK Big Ben
             ctx.fillStyle = "#B38B6D"; // Brick
-            ctx.fillRect(bx + 150, h-500, 80, 400);
+            ctx.fillRect(bx + 150, baseH-500, 80, 400);
             ctx.fillStyle = "#333"; // Roof
-            ctx.beginPath(); ctx.moveTo(bx+140, h-500); ctx.lineTo(bx+190, h-600); ctx.lineTo(bx+240, h-500); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(bx+140, baseH-500); ctx.lineTo(bx+190, baseH-600); ctx.lineTo(bx+240, baseH-500); ctx.fill();
             ctx.fillStyle = "#FFF"; // Clock Face
-            ctx.beginPath(); ctx.arc(bx + 190, h-430, 30, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx+190, h-430); ctx.lineTo(bx+190, h-455); ctx.stroke(); // Hands
+            ctx.beginPath(); ctx.arc(bx + 190, baseH-430, 30, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx+190, baseH-430); ctx.lineTo(bx+190, baseH-455); ctx.stroke(); // Hands
         }
     }
     ctx.restore();
@@ -355,10 +356,11 @@ function drawBackground(levelIdx, camX) {
     ctx.fillStyle = (levelIdx === 0 || levelIdx === 1) ? "#D4B450" : "#1E5D1E"; // Sand or darker grass
     for(let i=-1; i<(w/200)+2; i++) {
         let x = bxNear + (i * 200);
+        let detailY = h - FLOOR_OFFSET;
         if (levelIdx < 2) { // Sand ripples
-            ctx.beginPath(); ctx.ellipse(x+50, h-60, 40, 5, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(x+50, detailY-10, 40, 5, 0, 0, Math.PI*2); ctx.fill();
         } else { // Grass tufts
-             ctx.beginPath(); ctx.moveTo(x+50, h-50); ctx.lineTo(x+60, h-70); ctx.lineTo(x+70, h-50); ctx.fill();
+             ctx.beginPath(); ctx.moveTo(x+50, detailY); ctx.lineTo(x+60, detailY-20); ctx.lineTo(x+70, detailY); ctx.fill();
         }
     }
     ctx.restore();
@@ -514,7 +516,10 @@ function drawProjectile(p) {
 // --- LOGIC ---
 
 function resetLevel() {
-    player.x = 50; player.y = h - 200; player.vx = 0; player.vy = 0;
+    player.x = 50; 
+    // Start player higher up due to raised floor
+    player.y = h - 300; 
+    player.vx = 0; player.vy = 0;
     player.dead = false; projectiles = []; bossTriggered = false;
     generateLevel(currentLevelIdx);
 }
@@ -524,27 +529,27 @@ function generateLevel(idx) {
     levelWidth = 3000;
     let config = LEVELS[idx];
 
-    // Floor
-    platforms.push({x: -100, y: h-50, w: levelWidth + 200, h: 50, c: config.ground, type: 'floor'});
+    // Floor - RAISED by FLOOR_OFFSET (160px)
+    // h value is 160 so it fills to the bottom of the screen
+    platforms.push({x: -100, y: h-FLOOR_OFFSET, w: levelWidth + 200, h: FLOOR_OFFSET, c: config.ground, type: 'floor'});
 
     // Procedural Platforms
     let cx = 300;
     while(cx < levelWidth - 500) {
         let gap = 60 + Math.random() * 80;
         let pw = 120 + Math.random() * 150;
-        let ph = h - 140 - (Math.random() * 160);
+        
+        // Height relative to the NEW floor
+        // Floor is at h-FLOOR_OFFSET.
+        // We want plats to be between 80px and 220px above that.
+        let ph = (h - FLOOR_OFFSET) - (80 + Math.random() * 140);
         
         if (Math.random() > 0.2) {
             // Platform
             platforms.push({x: cx, y: ph, w: pw, h: 20, c: config.accent, type: 'plat'});
             
-            // Decoration: Flag on platform?
-            if (Math.random() > 0.7) {
-                // Just visual data, not collision
-            }
-
-            // Enemy
-            if (idx < 3 && Math.random() > 0.4) {
+            // Enemy - REDUCED PROBABILITY (was 0.4, now 0.7 for less enemies)
+            if (idx < 3 && Math.random() > 0.7) {
                 enemies.push({
                     x: cx + 20, y: ph - 60, w: 40, h: 60, vx: 1, vy: 0, 
                     patrolStart: cx, patrolEnd: cx + pw,
@@ -562,13 +567,17 @@ function generateLevel(idx) {
     if (idx === 3) {
         levelWidth = 1500;
         finishLineX = levelWidth - 100;
+        
+        // Boss sits on the raised floor
+        let floorY = h - FLOOR_OFFSET;
+        
         boss = {
-            x: 800, y: h - 140, w: 80, h: 90, vx: 0, vy: 0,
+            x: 800, y: floorY - 90, w: 80, h: 90, vx: 0, vy: 0,
             isBoss: true, timer: 0, facingRight: false, grounded: false
         };
         enemies.push(boss);
-        // Made switch bigger and adjusted Y position
-        bossSwitch = { x: 1180, y: h - 110, w: 80, h: 60, active: true };
+        // Switch position adjusted
+        bossSwitch = { x: 1180, y: floorY - 60, w: 80, h: 60, active: true };
         platforms.push({x: 1300, y: 0, w: 50, h: h, c: '#000', type: 'wall'}); 
     }
 }
@@ -628,7 +637,11 @@ function update() {
                     e.vy = -BOSS_JUMP_FORCE; e.grounded = false; e.timer = 0; AudioSys.jump();
                 }
                 e.vy += GRAVITY; e.y += e.vy;
-                if (e.y > h - 50 - e.h) { e.y = h - 50 - e.h; e.vy = 0; e.grounded = true; }
+                
+                // Floor collision for boss (using fixed floor height logic)
+                let floorY = h - FLOOR_OFFSET;
+                if (e.y > floorY - e.h) { e.y = floorY - e.h; e.vy = 0; e.grounded = true; }
+                
                 e.facingRight = player.x > e.x;
             }
         }
@@ -807,8 +820,9 @@ function draw() {
     }
 
     // Finish Object (Boat)
-    ctx.fillStyle = "#8B4513"; ctx.fillRect(finishLineX, h-100, 100, 50);
-    ctx.fillStyle = "#FFF"; ctx.beginPath(); ctx.moveTo(finishLineX+50, h-100); ctx.lineTo(finishLineX+50, h-150); ctx.lineTo(finishLineX+90, h-120); ctx.fill();
+    let floorY = h - FLOOR_OFFSET;
+    ctx.fillStyle = "#8B4513"; ctx.fillRect(finishLineX, floorY-50, 100, 50);
+    ctx.fillStyle = "#FFF"; ctx.beginPath(); ctx.moveTo(finishLineX+50, floorY-50); ctx.lineTo(finishLineX+50, floorY-100); ctx.lineTo(finishLineX+90, floorY-70); ctx.fill();
 
     if (!player.dead) drawTaha(player.x, player.y, player.w, player.h, player.facingRight);
     enemies.forEach(e => { if (!e.dead) drawEnemy(e); });
