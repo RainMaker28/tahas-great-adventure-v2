@@ -3,23 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Taha's Great Adventure</title>
+    <title>Taha's Great Adventure: Retro Edition</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #202020;
-            font-family: 'Courier New', Courier, monospace;
-            touch-action: none; /* Prevent browser zooming/scrolling */
+            background-color: #111;
+            /* RETRO FONT RESTORED */
+            font-family: 'Courier New', Courier, monospace; 
+            touch-action: none;
             user-select: none;
             -webkit-user-select: none;
         }
         #gameCanvas {
             display: block;
             margin: 0 auto;
-            background-color: #87CEEB;
         }
-        /* Controls Overlay */
         #controls {
             position: absolute;
             bottom: 20px;
@@ -27,813 +26,887 @@
             height: 120px;
             display: flex;
             justify-content: space-between;
-            padding: 0 20px;
+            padding: 0 30px;
             box-sizing: border-box;
-            pointer-events: none; /* Let clicks pass through empty space */
+            pointer-events: none;
         }
         .btn {
             width: 80px;
             height: 80px;
-            background: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
             border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.3);
             pointer-events: auto;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 40px;
-            color: white;
-            cursor: pointer;
+            font-size: 30px;
+            color: rgba(255, 255, 255, 0.8);
+            transition: all 0.1s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
         .btn:active, .btn.pressed {
-            background: rgba(255, 255, 255, 0.6);
-            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.92);
+            border-color: #fff;
         }
-        #dpad {
-            display: flex;
-            gap: 10px;
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
         }
+        h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        p { margin: 0; font-size: 14px; opacity: 0.8; }
     </style>
 </head>
 <body>
 
 <canvas id="gameCanvas"></canvas>
 
+<div id="ui-layer">
+    <h1 id="levelTitle"></h1>
+    <p id="levelSub"></p>
+</div>
+
 <div id="controls">
-    <div id="dpad">
-        <div class="btn" id="btnLeft">←</div>
-        <div class="btn" id="btnRight">→</div>
+    <div style="display:flex; gap:20px;">
+        <div class="btn" id="btnLeft">◀</div>
+        <div class="btn" id="btnRight">▶</div>
     </div>
-    <div class="btn" id="btnJump">↑</div>
+    <div class="btn" id="btnJump">▲</div>
 </div>
 
 <script>
 (function() {
 /**
- * TAHA'S GREAT ADVENTURE
- * v2.2 - Raised Floor + Fewer Enemies
+ * TAHA'S GREAT ADVENTURE: RETRO EDITION
  */
 
-// --- CONFIGURATION ---
+// --- ENGINE CONSTANTS ---
 const GRAVITY = 0.6;
-const FRICTION = 0.8;
-const MOVE_SPEED = 5;
-const JUMP_FORCE = 13;
+const FRICTION = 0.85; 
+const MOVE_SPEED = 0.8; 
+const MAX_SPEED = 7;
+const JUMP_FORCE = 10.5; // REDUCED JUMP HEIGHT
 const BOSS_JUMP_FORCE = 16;
-const FLOOR_OFFSET = 160; // Raises the floor 160px from bottom to clear thumbs
+const FLOOR_OFFSET = 240; 
 
-// --- ASSETS & PALETTES ---
+// --- ASSETS & THEMES ---
 const LEVELS = [
     { 
-        name: "Tripoli, Libya", 
-        sky: "#87CEEB", // Day Blue
-        ground: "#E3C96E", // Sand
-        accent: "#239E46", // Libya Green
-        flag: ["#E70013", "#000000", "#239E46"], 
+        name: "TRIPOLI", 
+        sub: "THE DEPARTURE",
+        skyTop: "#4facfe", skyBot: "#00f2fe", 
+        groundBase: "#e6cfa3", groundDark: "#cbb17e", 
+        accent: "#239E46", 
         monument: "arch",
-        bgFeature: "dunes"
+        mood: "sun",
+        partColor: "rgba(230, 207, 163, 0.6)"
     }, 
     { 
-        name: "Pisa, Italy", 
-        sky: "#B0E0E6", // Light Blue
-        ground: "#8B4513", // Earth
-        accent: "#CE2B37", // Italy Red
-        flag: ["#009246", "#FFFFFF", "#CE2B37"],
+        name: "PISA", 
+        sub: "THE CROSSING",
+        skyTop: "#fdcbf1", skyBot: "#e6dee9", 
+        groundBase: "#8B4513", groundDark: "#5D4037", 
+        accent: "#CE2B37", 
         monument: "tower",
-        bgFeature: "hills"
+        mood: "golden",
+        partColor: "rgba(255, 255, 255, 0.4)"
     }, 
     { 
-        name: "Paris, France", 
-        sky: "#A0C4FF", // Soft Blue
-        ground: "#708090", // Pavement Grey
-        accent: "#002395", // France Blue
-        flag: ["#002395", "#FFFFFF", "#ED2939"],
+        name: "PARIS", 
+        sub: "THE ROUTE",
+        skyTop: "#0f2027", skyBot: "#203a43", 
+        groundBase: "#596164", groundDark: "#2C3E50", 
+        accent: "#002395", 
         monument: "eiffel",
-        bgFeature: "clouds"
+        mood: "night",
+        partColor: "rgba(240, 240, 100, 0.8)"
     }, 
     { 
-        name: "London, UK",    
-        sky: "#A9A9A9", // London Grey
-        ground: "#228B22", // Grass Green
-        accent: "#C8102E", // UK Red
-        flag: ["#012169", "#FFFFFF", "#C8102E"],
+        name: "LONDON",    
+        sub: "THE ARRIVAL",
+        skyTop: "#3a6073", skyBot: "#3a6073", 
+        groundBase: "#2e8b57", groundDark: "#1a5e3a", 
+        accent: "#C8102E", 
         monument: "ben",
-        bgFeature: "rainclouds"
+        mood: "rain",
+        partColor: "rgba(200, 220, 255, 0.6)"
     }  
 ];
 
-// --- AUDIO SYSTEM (Safe Mode) ---
+// --- AUDIO SYSTEM ---
 const AudioSys = {
     ctx: null,
     init: function() {
         if (!this.ctx) {
-            try {
-                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-            } catch (e) {
-                console.warn("AudioContext not supported or blocked", e);
-            }
+            try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } 
+            catch (e) {}
         }
-        if (this.ctx && this.ctx.state === 'suspended') {
-            this.ctx.resume().catch(console.error);
-        }
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
     },
-    playTone: function(freq, type, duration) {
+    playTone: function(freq, type, duration, vol=0.1) {
         if (!this.ctx) return;
-        try {
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-            gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-            osc.connect(gain);
-            gain.connect(this.ctx.destination);
-            osc.start();
-            osc.stop(this.ctx.currentTime + duration);
-        } catch(e) { /* Ignore audio errors */ }
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
     },
-    jump: function() { this.playTone(300, 'square', 0.1); },
-    land: function() { this.playTone(100, 'sawtooth', 0.1); },
-    hit: function() { this.playTone(150, 'sawtooth', 0.3); },
-    win: function() { 
-        if(!this.ctx) return;
-        [523, 659, 783, 1046].forEach((f, i) => setTimeout(() => this.playTone(f, 'square', 0.2), i*100));
-    },
-    shoot: function() { this.playTone(400, 'triangle', 0.1); }
+    jump: function() { this.playTone(300, 'square', 0.15, 0.1); },
+    land: function() { this.playTone(80, 'sawtooth', 0.2, 0.3); }, 
+    shoot: function() { this.playTone(600, 'sawtooth', 0.1, 0.05); },
+    hit: function() { this.playTone(150, 'sawtooth', 0.3, 0.2); },
+    win: function() { if(this.ctx) [523, 659, 783, 1046].forEach((f, i) => setTimeout(() => this.playTone(f, 'square', 0.3, 0.1), i*100)); }
 };
 
-// --- GAME STATE ---
-const STATE_TITLE = 0;
-const STATE_MAP = 1;
-const STATE_LEVEL = 2;
-const STATE_GAMEOVER = 3;
-const STATE_VICTORY = 4;
+// --- PARTICLE SYSTEM ---
+class Particle {
+    constructor(x, y, type) {
+        this.x = x; this.y = y;
+        this.life = 1.0;
+        this.type = type; 
+        
+        if (type === 'dust') {
+            this.vx = (Math.random() - 0.5) * 4;
+            this.vy = (Math.random() * -3) - 1;
+            this.size = Math.random() * 8 + 3;
+            this.decay = 0.03;
+        } else if (type === 'rain') {
+            this.x = Math.random() * 4000;
+            this.y = -50;
+            this.vx = -2;
+            this.vy = 12 + Math.random() * 5;
+            this.size = 2;
+            this.life = 100;
+            this.decay = 0;
+        } else if (type === 'firefly') {
+            this.x = Math.random() * 4000;
+            this.y = Math.random() * window.innerHeight;
+            this.vx = (Math.random() - 0.5) * 0.5;
+            this.vy = (Math.random() - 0.5) * 0.5;
+            this.size = Math.random() * 3;
+            this.decay = 0.00;
+        }
+    }
+    update() {
+        this.x += this.vx; this.y += this.vy;
+        if (this.type === 'dust') {
+            this.life -= this.decay;
+            this.size *= 0.95;
+        } else if (this.type === 'rain') {
+            if (this.y > window.innerHeight) { this.y = -50; this.x = Math.random() * 4000; }
+        } else if (this.type === 'firefly') {
+            this.life = 0.5 + Math.sin(Date.now() / 200) * 0.5;
+        }
+    }
+    draw(ctx, camX) {
+        if (this.life <= 0) return;
+        ctx.fillStyle = this.type === 'rain' ? 'rgba(200,200,255,0.4)' : 
+                       (this.type === 'firefly' ? `rgba(255, 255, 100, ${this.life})` : LEVELS[currentLevelIdx].partColor);
+        ctx.beginPath();
+        if (this.type === 'rain') {
+            ctx.rect(this.x - camX, this.y, 2, 15);
+        } else {
+            ctx.arc(this.x - (this.type==='dust'?camX:camX*0.8), this.y, this.size, 0, Math.PI*2);
+        }
+        ctx.fill();
+    }
+}
 
-let currentState = STATE_TITLE;
+// --- STATE & OBJECTS ---
+let particles = [];
+let weatherParticles = [];
+let shake = 0;
+
+let player = { 
+    x: 50, y: 100, w: 40, h: 60, 
+    vx: 0, vy: 0, 
+    grounded: false, facingRight: true, dead: false,
+    animTimer: 0,
+    scaleY: 1, scaleX: 1 
+};
+let camera = { x: 0, y: 0 };
+let currentState = 0; // 0:Title, 1:Map, 2:Play, 3:Win
 let currentLevelIdx = 0;
 let mapProgress = 0;
+let levelData = { platforms:[], enemies:[], projectiles:[], finishX: 0, boss:null, switch:null };
 
-// --- CANVAS ---
+// --- TEXTURE GENERATOR ---
+function createNoiseTexture(colorBase, colorDark) {
+    const c = document.createElement('canvas');
+    c.width = 100; c.height = 100;
+    const x = c.getContext('2d');
+    x.fillStyle = colorBase;
+    x.fillRect(0,0,100,100);
+    x.fillStyle = colorDark;
+    for(let i=0; i<300; i++) {
+        x.beginPath();
+        x.arc(Math.random()*100, Math.random()*100, Math.random()*3, 0, Math.PI*2);
+        x.fill();
+    }
+    return x.createPattern(c, 'repeat');
+}
+let currentGroundPattern = null;
+
+// --- INPUT & RESIZE ---
+const keys = { left:false, right:false, up:false };
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 let w, h;
+function resize() { w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight; }
+window.addEventListener('resize', resize); resize();
 
-function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resize);
-resize();
-
-// --- INPUT ---
-const keys = { left: false, right: false, up: false };
-
-window.addEventListener('keydown', (e) => {
-    if(e.code === 'ArrowLeft') keys.left = true;
-    if(e.code === 'ArrowRight') keys.right = true;
-    if(e.code === 'ArrowUp' || e.code === 'Space') {
-        if(!keys.up) handleJumpInput();
-        keys.up = true;
-    }
-});
-window.addEventListener('keyup', (e) => {
-    if(e.code === 'ArrowLeft') keys.left = false;
-    if(e.code === 'ArrowRight') keys.right = false;
-    if(e.code === 'ArrowUp' || e.code === 'Space') keys.up = false;
-});
-
-const addInput = (elem, key) => {
-    const start = (e) => {
-        if(e.cancelable) e.preventDefault();
-        keys[key] = true;
-        elem.classList.add('pressed');
-        if(key === 'up') handleJumpInput();
-    };
-    const end = (e) => {
-        if(e.cancelable) e.preventDefault();
-        keys[key] = false;
-        elem.classList.remove('pressed');
-    };
-    elem.addEventListener('touchstart', start, {passive: false});
-    elem.addEventListener('touchend', end, {passive: false});
-    elem.addEventListener('mousedown', start);
-    elem.addEventListener('mouseup', end);
-    elem.addEventListener('mouseleave', end);
+const bindInput = (id, k) => {
+    const el = document.getElementById(id);
+    const start = (e) => { e.preventDefault(); keys[k]=true; el.classList.add('pressed'); if(k==='up') jump(); };
+    const end = (e) => { e.preventDefault(); keys[k]=false; el.classList.remove('pressed'); };
+    el.addEventListener('touchstart', start, {passive:false});
+    el.addEventListener('touchend', end);
+    el.addEventListener('mousedown', start);
+    el.addEventListener('mouseup', end);
+    el.addEventListener('mouseleave', end);
 };
-addInput(document.getElementById('btnLeft'), 'left');
-addInput(document.getElementById('btnRight'), 'right');
-addInput(document.getElementById('btnJump'), 'up');
+bindInput('btnLeft','left'); bindInput('btnRight','right'); bindInput('btnJump','up');
+window.addEventListener('keydown', e => {
+    if(e.code==='ArrowLeft') keys.left=true;
+    if(e.code==='ArrowRight') keys.right=true;
+    if(e.code==='ArrowUp'||e.code==='Space') { keys.up=true; jump(); }
+});
+window.addEventListener('keyup', e => {
+    if(e.code==='ArrowLeft') keys.left=false;
+    if(e.code==='ArrowRight') keys.right=false;
+    if(e.code==='ArrowUp'||e.code==='Space') keys.up=false;
+});
 
-document.addEventListener('click', () => { AudioSys.init(); }, { once: true });
+// --- CORE FUNCTIONS ---
 
-function handleJumpInput() {
-    AudioSys.init(); 
-    if (currentState === STATE_TITLE || currentState === STATE_GAMEOVER || currentState === STATE_VICTORY) {
-        if (currentState === STATE_GAMEOVER || currentState === STATE_VICTORY) currentLevelIdx = 0;
-        if (currentState !== STATE_MAP) { currentState = STATE_MAP; mapProgress = 0; }
-        return;
-    }
-    if (currentState === STATE_LEVEL && player.grounded) {
+function jump() {
+    AudioSys.init();
+    if(currentState === 0) { startMap(0); return; }
+    if(currentState === 3) { startMap(0); return; }
+    if(currentState === 2 && player.grounded) {
         player.vy = -JUMP_FORCE;
         player.grounded = false;
+        player.scaleY = 1.3; 
+        player.scaleX = 0.8;
+        createParticles(player.x + player.w/2, player.y + player.h, 5, 'dust');
         AudioSys.jump();
     }
 }
 
-// --- GAME OBJECTS ---
-let player = { x: 50, y: 100, w: 40, h: 60, vx: 0, vy: 0, grounded: false, facingRight: true, dead: false };
-let camera = { x: 0 };
-let levelWidth = 0;
-let platforms = [];
-let enemies = [];
-let projectiles = [];
-let finishLineX = 0;
-let boss = null;
-let bossTriggered = false;
-let bossSwitch = null;
-
-// --- DRAWING ---
-
-function drawBackground(levelIdx, camX) {
-    const config = LEVELS[levelIdx];
-    const mon = config.monument;
-    const bg = config.bgFeature;
-    // Shift background up to account for raised floor
-    const Y_SHIFT = 100; 
-
-    // --- Layer 1: Far Background (Slowest Parallax factor 0.1) ---
-    ctx.save();
-    let bxFar = -(camX * 0.1) % w;
-    
-    if (bg === 'dunes') { // Libya
-        ctx.fillStyle = "#D4B450";
-        ctx.beginPath();
-        ctx.moveTo(bxFar - w, h-150-Y_SHIFT);
-        for(let i=0; i<3; i++) {
-            let startX = bxFar + (i*w) - w;
-            ctx.quadraticCurveTo(startX + w/4, h-250-Y_SHIFT, startX + w/2, h-180-Y_SHIFT);
-            ctx.quadraticCurveTo(startX + w*3/4, h-220-Y_SHIFT, startX + w, h-150-Y_SHIFT);
-        }
-        ctx.lineTo(bxFar + 2*w, h); ctx.lineTo(bxFar - w, h); ctx.fill();
-    } else if (bg === 'hills' || bg === 'clouds' || bg === 'rainclouds') {
-        ctx.fillStyle = (bg === 'rainclouds') ? "#777" : "#FFF";
-        ctx.globalAlpha = (bg === 'hills') ? 1.0 : 0.6;
-        if(bg==='hills') ctx.fillStyle = "#5A7D43"; // Distant green hills
-
-        for(let i=0; i<3; i++) {
-            let startX = bxFar + (i*w) - w;
-            ctx.beginPath();
-            if(bg==='hills') {
-                 ctx.moveTo(startX, h-100-Y_SHIFT); ctx.quadraticCurveTo(startX+w/2, h-300-Y_SHIFT, startX+w, h-100-Y_SHIFT);
-                 ctx.lineTo(startX+w, h); ctx.lineTo(startX, h); // Fill down
-            } else {
-                 // Clouds
-                 ctx.arc(startX+100, 100, 50, 0, Math.PI*2);
-                 ctx.arc(startX+250, 120, 70, 0, Math.PI*2);
-                 ctx.arc(startX+400, 80, 40, 0, Math.PI*2);
-            }
-            ctx.fill();
-        }
-        ctx.globalAlpha = 1.0;
-    }
-    ctx.restore();
-
-    // --- Layer 2: Monuments (Medium Parallax factor 0.3) ---
-    ctx.save();
-    for(let i=0; i<4; i++) {
-        let bx = (i * 1000) - (camX * 0.3); 
-        // Don't draw if far offscreen
-        if (bx < -400 || bx > w) continue;
-
-        let baseH = h - Y_SHIFT;
-
-        if (mon === 'arch') { // Libya Arch (Marcus Aurelius style)
-            ctx.fillStyle = "#C2B280"; // Sandstone
-            ctx.fillRect(bx + 100, baseH - 350, 200, 250); // Main block
-            ctx.fillStyle = "#A89A70"; // Darker details
-            ctx.fillRect(bx + 120, baseH - 350, 20, 250); // Pillar left
-            ctx.fillRect(bx + 260, baseH - 350, 20, 250); // Pillar right
-            ctx.fillStyle = config.sky; // Clear archway
-            ctx.beginPath(); ctx.arc(bx + 200, baseH - 150, 60, Math.PI, 0); ctx.fill();
-        } else if (mon === 'tower') { // Pisa
-            ctx.fillStyle = "#EEE"; // Marble
-            ctx.beginPath();
-            ctx.moveTo(bx + 150, baseH-100); ctx.lineTo(bx + 180, baseH-450); // Leaning Left side
-            ctx.lineTo(bx + 260, baseH-450); // Top
-            ctx.lineTo(bx + 230, baseH-100); // Leaning Right side
-            ctx.fill();
-            // Tiers
-            ctx.strokeStyle = "#CCC"; ctx.lineWidth = 2;
-            for(let j=1; j<7; j++) {
-                let y = baseH - 100 - (j*50);
-                let leanOffset = j*4.5;
-                ctx.beginPath(); ctx.moveTo(bx+150+leanOffset, y); ctx.lineTo(bx+230+leanOffset, y); ctx.stroke();
-            }
-        } else if (mon === 'eiffel') { // Paris
-            ctx.fillStyle = "#555"; // Iron Grey
-            ctx.beginPath();
-            ctx.moveTo(bx + 100, baseH-100); ctx.lineTo(bx + 200, baseH-500); ctx.lineTo(bx + 300, baseH-100); // Main spire
-            ctx.fill();
-            ctx.fillStyle = "#444"; // Darker cross beams
-            ctx.fillRect(bx + 160, baseH-250, 80, 10);
-            ctx.fillRect(bx + 185, baseH-400, 30, 8);
-            ctx.beginPath(); ctx.moveTo(bx+130, baseH-100); ctx.quadraticCurveTo(bx+200, baseH-200, bx+270, baseH-100); ctx.fill(); // Base arch base
-        } else if (mon === 'ben') { // UK Big Ben
-            ctx.fillStyle = "#B38B6D"; // Brick
-            ctx.fillRect(bx + 150, baseH-500, 80, 400);
-            ctx.fillStyle = "#333"; // Roof
-            ctx.beginPath(); ctx.moveTo(bx+140, baseH-500); ctx.lineTo(bx+190, baseH-600); ctx.lineTo(bx+240, baseH-500); ctx.fill();
-            ctx.fillStyle = "#FFF"; // Clock Face
-            ctx.beginPath(); ctx.arc(bx + 190, baseH-430, 30, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx+190, baseH-430); ctx.lineTo(bx+190, baseH-455); ctx.stroke(); // Hands
-        }
-    }
-    ctx.restore();
-
-    // --- Layer 3: Near Ground Details (Fastest Parallax 0.8) ---
-    ctx.save();
-    let bxNear = -(camX * 0.8) % 200;
-    ctx.fillStyle = (levelIdx === 0 || levelIdx === 1) ? "#D4B450" : "#1E5D1E"; // Sand or darker grass
-    for(let i=-1; i<(w/200)+2; i++) {
-        let x = bxNear + (i * 200);
-        let detailY = h - FLOOR_OFFSET;
-        if (levelIdx < 2) { // Sand ripples
-            ctx.beginPath(); ctx.ellipse(x+50, detailY-10, 40, 5, 0, 0, Math.PI*2); ctx.fill();
-        } else { // Grass tufts
-             ctx.beginPath(); ctx.moveTo(x+50, detailY); ctx.lineTo(x+60, detailY-20); ctx.lineTo(x+70, detailY); ctx.fill();
-        }
-    }
-    ctx.restore();
+function createParticles(x, y, count, type) {
+    for(let i=0; i<count; i++) particles.push(new Particle(x, y, type));
 }
 
-function drawTaha(x, y, w, h, facingRight) {
+function startMap(idx) {
+    currentState = 1;
+    currentLevelIdx = idx;
+    mapProgress = 0;
+    particles = [];
+    document.getElementById('levelTitle').innerText = "";
+    document.getElementById('levelSub').innerText = "";
+}
+
+function startLevel(idx) {
+    currentLevelIdx = idx;
+    currentState = 2;
+    player.x = 50; player.y = h - 300; player.vx = 0; player.vy = 0; player.dead = false;
+    particles = []; weatherParticles = [];
+    shake = 0;
+    
+    // UI Update
+    const config = LEVELS[idx];
+    document.getElementById('levelTitle').innerText = "LEVEL " + (idx+1);
+    document.getElementById('levelTitle').style.color = config.accent;
+    document.getElementById('levelSub').innerText = config.name + " // " + config.sub;
+
+    // Generate Texture
+    currentGroundPattern = createNoiseTexture(config.groundBase, config.groundDark);
+
+    // Weather Init
+    if (config.mood === 'rain') {
+        for(let i=0; i<100; i++) weatherParticles.push(new Particle(0,0,'rain'));
+    } else if (config.mood === 'night') {
+        for(let i=0; i<30; i++) weatherParticles.push(new Particle(0,0,'firefly'));
+    }
+
+    // Level Gen
+    levelData.platforms = []; levelData.enemies = []; levelData.projectiles = [];
+    levelData.switch = null; levelData.boss = null;
+    
+    let levelLen = 3000;
+    if(idx === 3) levelLen = 1500;
+    levelData.finishX = levelLen - 200;
+
+    // Floor
+    levelData.platforms.push({x:-200, y:h-FLOOR_OFFSET, w:levelLen+400, h:FLOOR_OFFSET+200, type:'floor'});
+
+    // Plats
+    let cx = 300;
+    while(cx < levelLen - 500) {
+        let gap = 100 + Math.random() * 80;
+        let w = 120 + Math.random() * 150;
+        let y = h - FLOOR_OFFSET - (60 + Math.random() * 120);
+        
+        if (Math.random() > 0.3) {
+            levelData.platforms.push({x:cx, y:y, w:w, h:20, type:'plat'});
+            if(idx < 3 && Math.random() > 0.6) {
+                levelData.enemies.push({
+                    x:cx+20, y:y-60, w:40, h:60, vx:1, patrolStart:cx, patrolEnd:cx+w,
+                    type: idx===0?'gun':(idx===1?'pizza':'croissant'), cooldown:0, animTimer:0
+                });
+            }
+        }
+        cx += w + gap;
+    }
+
+    // Boss
+    if(idx === 3) {
+        let floorY = h - FLOOR_OFFSET;
+        // Boss spawns much higher (-300) to ensure she falls and lands on top of floor
+        levelData.boss = { x:800, y:floorY-300, w:80, h:90, vx:0, vy:0, hp:3, timer:0, grounded:true, isBoss:true };
+        levelData.enemies.push(levelData.boss);
+        levelData.switch = { x:1180, y:floorY-60, w:60, h:60, active:true };
+        levelData.platforms.push({x:1300, y:0, w:50, h:h, type:'wall'});
+    }
+}
+
+function update() {
+    if (currentState === 1) { // Map Update
+        mapProgress += 0.01;
+        if (mapProgress > 1) startLevel(currentLevelIdx);
+        return;
+    }
+
+    if(currentState !== 2) return;
+
+    // Camera Shake Decay
+    if (shake > 0) shake *= 0.9;
+    if (shake < 0.5) shake = 0;
+    camera.y = (Math.random() - 0.5) * shake;
+    camera.x += ((player.x - w/3) - camera.x) * 0.1;
+
+    // Player Physics
+    let move = 0;
+    if(keys.left) move = -1;
+    if(keys.right) move = 1;
+    
+    player.vx += move * MOVE_SPEED;
+    player.vx *= FRICTION;
+    player.vx = Math.max(Math.min(player.vx, MAX_SPEED), -MAX_SPEED);
+    
+    if (Math.abs(player.vx) > 0.1) player.facingRight = player.vx > 0;
+    player.vy += GRAVITY;
+    player.x += player.vx;
+    player.y += player.vy;
+    
+    // Animation Logic
+    player.animTimer += Math.abs(player.vx) * 0.1;
+    // Recover scale
+    player.scaleX += (1 - player.scaleX) * 0.1;
+    player.scaleY += (1 - player.scaleY) * 0.1;
+    // Dust while running
+    if(player.grounded && Math.abs(player.vx) > 3 && Math.random() > 0.8) {
+        createParticles(player.x + 20, player.y + 60, 1, 'dust');
+    }
+
+    // Collision
+    player.grounded = false;
+    levelData.platforms.forEach(p => {
+        if(player.x + player.w > p.x && player.x < p.x + p.w &&
+           player.y + player.h > p.y && player.y + player.h < p.y + p.h + 20 &&
+           player.vy >= 0) {
+               if(!player.grounded && player.vy > 2) {
+                   // Landed impact
+                   player.scaleY = 0.6; player.scaleX = 1.4;
+                   shake = 10; 
+                   createParticles(player.x + 20, p.y, 8, 'dust');
+                   AudioSys.land();
+               }
+               player.grounded = true;
+               player.vy = 0;
+               player.y = p.y - player.h;
+           }
+    });
+
+    if(player.y > h + 100) die();
+
+    // Update Enemies
+    levelData.enemies.forEach((e, i) => {
+        if(e.dead) return;
+        e.animTimer += 0.1;
+        
+        if(!e.isBoss) {
+            e.x += e.vx;
+            if(e.x < e.patrolStart || e.x > e.patrolEnd) e.vx *= -1;
+            e.facingRight = e.vx > 0;
+            e.cooldown++;
+            // Shoot
+            if(e.cooldown > 150 && Math.abs(player.x - e.x) < 600) {
+                e.cooldown = 0;
+                levelData.projectiles.push({x:e.x, y:e.y+20, vx:player.x>e.x?6:-6, vy:e.type==='gun'?0:-5, type:e.type});
+                AudioSys.shoot();
+            }
+        } else {
+            // Boss Logic
+            if(Math.abs(player.x - e.x) < 500) {
+                e.timer++;
+                if(e.grounded && e.timer > 100) {
+                    e.vy = -BOSS_JUMP_FORCE; e.grounded = false; e.timer = 0;
+                    shake = 10;
+                    AudioSys.jump();
+                }
+                e.vy += GRAVITY; e.y += e.vy;
+                let floorY = h - FLOOR_OFFSET;
+                // Hard check for boss floor collision
+                if(e.y + e.h > floorY) { e.y = floorY - e.h; e.vy = 0; e.grounded = true; }
+                e.facingRight = player.x > e.x;
+            }
+        }
+
+        // Enemy Collision
+        if(rectCol(player, e)) {
+            if(!e.isBoss && player.vy > 0 && player.y + player.h < e.y + e.h*0.6) {
+                e.dead = true;
+                player.vy = -10;
+                shake = 5;
+                createParticles(e.x+20, e.y+30, 10, 'dust');
+                AudioSys.hit();
+                levelData.enemies.splice(i, 1);
+            } else {
+                die();
+            }
+        }
+    });
+
+    // Projectiles
+    for(let i=levelData.projectiles.length-1; i>=0; i--) {
+        let p = levelData.projectiles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.15;
+        if(p.y > h) levelData.projectiles.splice(i,1);
+        if(rectCol(player, {x:p.x, y:p.y, w:10, h:10})) die();
+    }
+
+    // Boss Switch
+    if(levelData.switch && levelData.switch.active && rectCol(player, levelData.switch)) {
+        levelData.switch.active = false;
+        levelData.boss.dead = true;
+        levelData.enemies = levelData.enemies.filter(e => !e.isBoss);
+        levelData.platforms.pop(); // Remove wall
+        shake = 20;
+        createParticles(levelData.switch.x, levelData.switch.y, 30, 'dust');
+        AudioSys.win();
+    }
+
+    // Win Level
+    if(player.x > levelData.finishX) {
+        if(currentLevelIdx < 3) startMap(currentLevelIdx+1);
+        else currentState = 3;
+    }
+
+    // Particles
+    particles.forEach((p, i) => {
+        p.update();
+        if(p.life <= 0) particles.splice(i, 1);
+    });
+    weatherParticles.forEach(p => p.update());
+}
+
+function rectCol(a, b) {
+    return (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y);
+}
+
+function die() {
+    if(player.dead) return;
+    player.dead = true;
+    shake = 15;
+    AudioSys.hit();
+    setTimeout(() => startLevel(currentLevelIdx), 800);
+}
+
+// --- DRAWING ---
+function draw() {
+    // 1. CLEAR
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,w,h);
+
+    if (currentState === 0 || currentState === 3) {
+        drawTitleScreen();
+        return;
+    }
+
+    if (currentState === 1) {
+        drawMap();
+        return;
+    }
+
+    // PLAY STATE
+    let config = LEVELS[currentLevelIdx] || LEVELS[0];
+    
+    // Sky
+    let grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, config.skyTop);
+    grad.addColorStop(1, config.skyBot);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,w,h);
+
+    // Parallax
+    drawParallax(config.monument, camera.x);
+
     ctx.save();
-    ctx.translate(x + w/2, y + h/2);
-    if (!facingRight) ctx.scale(-1, 1);
+    ctx.translate(-camera.x, camera.y);
 
-    // Body: Deep Green Sweater (#006400) - Rounder belly
-    ctx.fillStyle = '#006400';
-    ctx.beginPath();
-    ctx.ellipse(0, 5, w/1.8, h/2.2, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // World
+    levelData.platforms.forEach(p => {
+        if(p.type === 'floor') {
+            ctx.fillStyle = currentGroundPattern || '#333';
+            ctx.fillRect(p.x, p.y, p.w, p.h);
+            ctx.fillStyle = config.accent;
+            ctx.fillRect(p.x, p.y, p.w, 10);
+        } else if (p.type === 'plat') {
+            ctx.fillStyle = config.accent;
+            ctx.beginPath();
+            ctx.roundRect(p.x, p.y, p.w, p.h, 5);
+            ctx.fill();
+            if(p.w > 100) drawFlag(p.x+10, p.y+5, config.flag);
+        } else {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(p.x, p.y, p.w, p.h);
+        }
+    });
 
-    // Legs: Darker Green Trousers (CHANGED)
-    ctx.fillStyle = '#003300';
-    ctx.fillRect(-15, 15, 12, 20); 
-    ctx.fillRect(3, 15, 12, 20);
+    // Switch
+    if(levelData.switch && levelData.switch.active) {
+        let s = levelData.switch;
+        ctx.fillStyle = '#1a1f71';
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+        ctx.strokeStyle = '#f7b600'; ctx.lineWidth = 3;
+        ctx.strokeRect(s.x, s.y, s.w, s.h);
+        ctx.fillStyle = '#FFF'; ctx.font = "bold 16px Courier";
+        // CENTERED AND LOWERCASE
+        ctx.textAlign = 'center';
+        ctx.fillText("visa", s.x + s.w/2, s.y + s.h/2 + 5);
+        ctx.textAlign = 'start';
+    }
 
-    // Shoes: Brown
-    ctx.fillStyle = '#5D4037';
-    ctx.beginPath();
-    ctx.ellipse(-10, 35, 8, 4, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(8, 35, 8, 4, 0, 0, Math.PI*2);
-    ctx.fill();
+    // Exit Boat
+    let boatY = h - FLOOR_OFFSET - 20;
+    let boatX = levelData.finishX;
+    ctx.fillStyle = "#5D4037";
+    ctx.beginPath(); ctx.moveTo(boatX, boatY); ctx.lineTo(boatX+20, boatY+30); ctx.lineTo(boatX+100, boatY+30); ctx.lineTo(boatX+120, boatY); ctx.fill();
+    ctx.fillStyle = "#FFF";
+    ctx.beginPath(); ctx.moveTo(boatX+60, boatY); ctx.lineTo(boatX+60, boatY-60); ctx.lineTo(boatX+100, boatY-10); ctx.fill();
 
-    // Head: Brown Skin
-    ctx.fillStyle = '#A67B5B';
-    ctx.beginPath();
-    ctx.arc(0, -15, 14, 0, Math.PI * 2);
-    ctx.fill();
+    // Entities
+    if(!player.dead) drawTaha();
+    levelData.enemies.forEach(e => { if(!e.dead) drawEnemy(e); });
+    
+    levelData.projectiles.forEach(p => {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Date.now()/50);
+        ctx.beginPath();
+        if(p.type==='pizza') {
+            ctx.fillStyle = "#F4D03F";
+            ctx.arc(0,0,10,0,Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#C0392B';
+            ctx.beginPath(); ctx.arc(3,3, 3, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-3,-3, 3, 0, Math.PI*2); ctx.fill();
+        } else if (p.type === 'croissant') {
+             // CROISSANT GRAPHIC
+            ctx.fillStyle = "#E67E22";
+            ctx.ellipse(0,0, 10, 5, 0, 0, Math.PI*2);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = "#000";
+            ctx.rect(-5,-5,10,10);
+            ctx.fill();
+        }
+        ctx.restore();
+    });
 
-    // Face: Mustache
-    ctx.fillStyle = '#000';
-    ctx.fillRect(2, -12, 12, 4); // Mustache
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(8, -18, 2, 0, Math.PI*2); ctx.fill(); // Eye
+    particles.forEach(p => p.draw(ctx, 0));
 
-    // Hat: Red Cap (Mario style) (CHANGED)
-    ctx.fillStyle = '#FF0000';
-    ctx.beginPath();
-    ctx.arc(0, -22, 14, Math.PI, 0); // Dome
-    ctx.fill();
-    ctx.fillRect(-14, -22, 28, 5); // Band
-    ctx.fillRect(0, -20, 22, 4); // Brim
+    ctx.restore();
 
-    // Arms
-    ctx.fillStyle = '#006400';
-    ctx.beginPath();
-    ctx.ellipse(15, 5, 8, 15, Math.PI/4, 0, Math.PI*2);
+    // Atmosphere
+    weatherParticles.forEach(p => p.draw(ctx, camera.x));
+
+    // Global Lighting
+    if (config.mood === 'sun') {
+        let sun = ctx.createRadialGradient(0, 0, 50, 0, 0, w);
+        sun.addColorStop(0, 'rgba(255, 255, 200, 0.3)');
+        sun.addColorStop(1, 'rgba(255, 255, 200, 0)');
+        ctx.fillStyle = sun; ctx.fillRect(0,0,w,h);
+    } else if (config.mood === 'night') {
+        let vig = ctx.createRadialGradient(w/2, h/2, w/4, w/2, h/2, w);
+        vig.addColorStop(0, 'rgba(0,0,0,0)');
+        vig.addColorStop(1, 'rgba(0,0,0,0.5)');
+        ctx.fillStyle = vig; ctx.fillRect(0,0,w,h);
+    }
+}
+
+function drawFlag(x, y, cols) {
+    if(!cols) return;
+    let w=10, h=10;
+    ctx.fillStyle = cols[0]; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle = cols[1]; ctx.fillRect(x+w,y,w,h);
+    ctx.fillStyle = cols[2]; ctx.fillRect(x+w*2,y,w,h);
+}
+
+function drawTaha() {
+    ctx.save();
+    ctx.translate(player.x + player.w/2, player.y + player.h);
+    ctx.scale(player.scaleX, player.scaleY);
+    if (!player.facingRight) ctx.scale(-1, 1);
+    
+    let bounce = (Math.abs(player.vx) > 0.1 && player.grounded) ? Math.sin(player.animTimer) * 5 : 0;
+    ctx.translate(0, -player.h - bounce);
+
+    // Drop Shadow
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath(); ctx.ellipse(0, player.h + bounce, 15, 5, 0, 0, Math.PI*2); ctx.fill();
+
+    // --- UPDATED TAHA MODEL ---
+    
+    // Back Arm (Swing)
+    let armSwing = Math.sin(player.animTimer) * 15;
+    if(Math.abs(player.vx)<0.1) armSwing=0;
+    ctx.fillStyle = '#005500'; 
+    ctx.beginPath(); ctx.ellipse(-8, 20 - armSwing, 6, 12, 0.3, 0, Math.PI*2); ctx.fill();
+
+    // Legs (Dark Green)
+    let legOffset = Math.sin(player.animTimer) * 10;
+    if(Math.abs(player.vx) < 0.1) legOffset = 0;
+    ctx.fillStyle = '#002200'; 
+    ctx.beginPath(); ctx.roundRect(-12 + legOffset, 30, 10, 25, 5); ctx.fill(); 
+    ctx.beginPath(); ctx.roundRect(2 - legOffset, 30, 10, 25, 5); ctx.fill(); 
+
+    // Body (Sweater)
+    ctx.fillStyle = '#005500'; 
+    ctx.beginPath(); ctx.ellipse(0, 25, 22, 20, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.2)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-10, 20); ctx.lineTo(10, 20); ctx.stroke();
+
+    // Front Arm (Swing)
+    ctx.fillStyle = '#005500'; 
+    ctx.beginPath(); ctx.ellipse(12, 20 + armSwing, 6, 12, -0.3, 0, Math.PI*2); ctx.fill();
+
+    // Head
+    ctx.fillStyle = '#C68E65'; 
+    ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.fillRect(4, 2, 8, 4); // Mustache
+    // EYES REMOVED AS REQUESTED
+
+    // Hat (Improved Shape)
+    ctx.fillStyle = '#D32F2F';
+    ctx.beginPath(); 
+    ctx.moveTo(15, -5); ctx.lineTo(-15, -5); 
+    ctx.bezierCurveTo(-15, -20, 15, -20, 15, -5); // Smoother dome
     ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(-15, 5, 8, 15, -Math.PI/4, 0, Math.PI*2);
-    ctx.fill();
+    ctx.fillRect(10, -5, 12, 4); // Peak
 
     ctx.restore();
 }
 
 function drawEnemy(e) {
     ctx.save();
-    ctx.translate(e.x + e.w/2, e.y + e.h/2);
-    
+    ctx.translate(e.x + e.w/2, e.y + e.h);
+    if(e.facingRight) ctx.scale(-1, 1);
+    let bounce = Math.sin(e.animTimer) * 3;
+    ctx.translate(0, -e.h - bounce);
+
     if (e.isBoss) {
-        // Bodyguard Woman (Suit)
-        ctx.scale(e.facingRight ? -1 : 1, 1);
-        
-        // Suit Body
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(-30, -30, 60, 70);
-        // Shirt V
-        ctx.fillStyle = '#FFF';
-        ctx.beginPath(); ctx.moveTo(-10, -30); ctx.lineTo(10, -30); ctx.lineTo(0, -10); ctx.fill();
-        // Red Tie
-        ctx.fillStyle = '#D00';
-        ctx.fillRect(-3, -20, 6, 20);
-
-        // Head
-        ctx.fillStyle = '#8D5524'; 
-        ctx.beginPath(); ctx.arc(0, -45, 22, 0, Math.PI*2); ctx.fill();
-        
-        // Bob Hair
         ctx.fillStyle = '#111';
-        ctx.beginPath(); ctx.arc(0, -45, 24, Math.PI, 0); ctx.fill(); // Top
-        ctx.fillRect(-24, -45, 10, 35); // Left side
-        ctx.fillRect(14, -45, 10, 35); // Right side
+        // Legs (Added to fix height issue)
+        ctx.fillRect(-15, 50, 12, 40); 
+        ctx.fillRect(3, 50, 12, 40);
 
-        // Sunglasses
-        ctx.fillStyle = '#000'; 
-        ctx.fillRect(-10, -50, 25, 8);
-
+        // Body - Wider belly as requested (-30 instead of -20)
+        ctx.fillRect(-30, 10, 60, 50); 
+        
+        // Shirt V (Wider)
+        ctx.fillStyle = '#FFF'; ctx.beginPath(); ctx.moveTo(-15,10); ctx.lineTo(15,10); ctx.lineTo(0,35); ctx.fill(); 
+        
+        ctx.fillStyle = '#D00'; ctx.fillRect(-2,15,4,15); 
+        ctx.fillStyle = '#8D5524'; ctx.beginPath(); ctx.arc(0, -10, 18, 0, Math.PI*2); ctx.fill(); 
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, -12, 20, Math.PI, 0); ctx.fill(); 
+        ctx.fillRect(-20, -12, 10, 30); ctx.fillRect(10, -12, 10, 30); 
+        // SUNGLASSES REMOVED
     } else {
-        // Standard Enemy
-        ctx.scale(e.facingRight ? 1 : -1, 1);
+        // Generic Body
+        let color = currentLevelIdx===0 ? '#333' : '#FFF';
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.ellipse(0, 20, 15, 25, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#F1C27D'; ctx.beginPath(); ctx.arc(0, -5, 12, 0, Math.PI*2); ctx.fill();
         
-        // Outfit based on level
-        let bodyColor = currentLevelIdx === 0 ? '#333' : '#FFF';
-        ctx.fillStyle = bodyColor;
-        ctx.fillRect(-15, -15, 30, 45); // Body
-        
-        // Head
-        ctx.fillStyle = '#F1C27D';
-        ctx.beginPath(); ctx.arc(0, -20, 12, 0, Math.PI*2); ctx.fill(); 
-        
-        // Props & Hats
-        if (currentLevelIdx === 0) { // Gunman
-            ctx.fillStyle = '#111'; ctx.fillRect(-12, -32, 24, 6); // Hat
-            ctx.fillStyle = '#000'; ctx.fillRect(10, 0, 20, 6); // Gun
-        } else if (currentLevelIdx === 1) { // Chef
-            ctx.fillStyle = '#FFF'; // Toque
-            ctx.beginPath(); ctx.rect(-12, -45, 24, 25); ctx.fill();
-            ctx.beginPath(); ctx.arc(-12, -45, 10, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(0, -50, 12, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(12, -45, 10, 0, Math.PI*2); ctx.fill();
-        } else if (currentLevelIdx === 2) { // Baker
-            ctx.fillStyle = '#000'; // Beret
-            ctx.beginPath(); ctx.ellipse(0, -32, 16, 5, 0, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(0,-32); ctx.lineTo(0, -37); ctx.stroke();
+        // RESTORED PROPS
+        if(currentLevelIdx===1) { // Chef Hat
+            ctx.fillStyle='#FFF'; ctx.fillRect(-12, -25, 24, 20);
+        } else if (currentLevelIdx===2) { // Beret
+            ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(5, -15, 12, 5, -0.2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(5,-15); ctx.lineTo(5,-20); ctx.stroke();
+        } else { // Gunman Hat + Gun
+            ctx.fillStyle='#111'; ctx.fillRect(-12, -18, 24, 6);
+            ctx.fillStyle='#000'; ctx.fillRect(10, 20, 15, 5); // Gun
         }
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(0, -2); ctx.stroke(); // Angry
     }
     ctx.restore();
 }
 
-function drawProjectile(p) {
+function drawParallax(mon, camX) {
     ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(Date.now() / 100); 
+    let yBase = h - FLOOR_OFFSET;
     
-    // Outline for visibility
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
+    // Distant Shapes (Clouds/Hills)
+    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    for(let i=0; i<3; i++) {
+        let x = (i*800) - (camX * 0.1) % w;
+        ctx.beginPath(); ctx.arc(x, yBase-200, 80, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x+100, yBase-150, 120, 0, Math.PI*2); ctx.fill();
+    }
 
-    if (p.type === 'pizza') {
-        ctx.fillStyle = '#F4D03F';
-        ctx.beginPath(); ctx.arc(0,0, 12, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#C0392B';
-        ctx.beginPath(); ctx.arc(4,4, 4, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(-4,-4, 4, 0, Math.PI*2); ctx.fill();
-    } else if (p.type === 'croissant') {
-        ctx.fillStyle = '#E67E22';
-        ctx.beginPath(); ctx.ellipse(0,0, 12, 6, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    // Monuments (Detailed Version Restored)
+    for(let i=0; i<5; i++) {
+        // Adjusted spacing to ensure visibility
+        let mx = (i * 1000) - (camX * 0.2); 
+        
+        // Force Big Ben to appear near the boss in London (Level 4, index 3)
+        if (currentLevelIdx === 3 && i === 1) mx = 1100 - (camX * 0.2);
+
+        if(mx < -300 || mx > w) continue;
+        
+        if (mon === 'arch') { // Libya
+            ctx.fillStyle = "#C2B280"; // Sandstone
+            ctx.fillRect(mx, yBase-300, 200, 300); 
+            ctx.fillStyle = "#A89A70"; // Darker details
+            ctx.fillRect(mx + 20, yBase-300, 20, 300);
+            ctx.fillRect(mx + 160, yBase-300, 20, 300);
+            ctx.clearRect(mx+50, yBase-150, 100, 150); // Arch cutout
+        } else if (mon === 'tower') { // Pisa
+            ctx.fillStyle = "#EEE"; // Marble
+            ctx.beginPath(); 
+            ctx.moveTo(mx, yBase); ctx.lineTo(mx+50, yBase-400); 
+            ctx.lineTo(mx+120, yBase-400); ctx.lineTo(mx+100, yBase); 
+            ctx.fill();
+            // Stripes
+            ctx.strokeStyle = "rgba(0,0,0,0.1)"; ctx.lineWidth = 2;
+            for(let j=1; j<8; j++) {
+                ctx.beginPath(); ctx.moveTo(mx+10 + j*5, yBase-j*50); ctx.lineTo(mx+90 + j*5, yBase-j*50); ctx.stroke();
+            }
+        } else if (mon === 'eiffel') { // Paris
+            ctx.fillStyle = "#555"; // Iron
+            ctx.beginPath(); 
+            ctx.moveTo(mx, yBase); ctx.lineTo(mx+100, yBase-500); ctx.lineTo(mx+200, yBase); 
+            ctx.fill();
+            ctx.strokeStyle = "#333"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(mx+50, yBase-150); ctx.lineTo(mx+150, yBase-150); ctx.stroke();
+        } else if (mon === 'ben') { // London
+            ctx.fillStyle = "#B38B6D"; // Brick
+            ctx.fillRect(mx, yBase-500, 70, 500);
+            ctx.fillStyle = "#222"; // Roof
+            ctx.beginPath(); ctx.moveTo(mx-10, yBase-500); ctx.lineTo(mx+35, yBase-580); ctx.lineTo(mx+80, yBase-500); ctx.fill();
+            ctx.fillStyle = "#FFF"; // Clock
+            ctx.beginPath(); ctx.arc(mx+35, yBase-430, 28, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = "#000"; ctx.lineWidth = 2; // Hands
+            ctx.beginPath(); ctx.moveTo(mx+35, yBase-430); ctx.lineTo(mx+35, yBase-450); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(mx+35, yBase-430); ctx.lineTo(mx+50, yBase-440); ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+function drawTitleScreen() {
+    let grad = ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0, '#0f2027'); grad.addColorStop(1, '#203a43');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,w,h);
+    
+    ctx.textAlign = 'center';
+    
+    if (currentState === 0) {
+        ctx.fillStyle = '#FFF';
+        ctx.font = 'bold 50px Courier'; 
+        ctx.fillText("TAHA'S", w/2, h/2 - 70);
+        ctx.fillStyle = '#239E46'; 
+        ctx.font = 'bold 50px Courier';
+        ctx.fillText("GREAT ADVENTURE", w/2, h/2);
+        
+        ctx.fillStyle = '#AAA'; 
+        ctx.font = '20px Courier'; 
+        ctx.fillText("[ TAP TO START ]", w/2, h/2 + 80);
+        
+        // Idle Taha
+        player.x = w/2 - 20; player.y = h/2 + 120; player.facingRight=true; player.vx=0; player.animTimer += 0.05;
+        drawTaha();
     } else {
-        // Bullet - High contrast Yellow with black border
         ctx.fillStyle = '#FFD700'; 
-        ctx.beginPath(); ctx.rect(-6, -3, 12, 6); ctx.fill(); ctx.stroke();
-    }
-    ctx.restore();
-}
-
-// --- LOGIC ---
-
-function resetLevel() {
-    player.x = 50; 
-    // Start player higher up due to raised floor
-    player.y = h - 300; 
-    player.vx = 0; player.vy = 0;
-    player.dead = false; projectiles = []; bossTriggered = false;
-    generateLevel(currentLevelIdx);
-}
-
-function generateLevel(idx) {
-    platforms = []; enemies = []; boss = null; bossSwitch = null;
-    levelWidth = 3000;
-    let config = LEVELS[idx];
-
-    // Floor - RAISED by FLOOR_OFFSET (160px)
-    // h value is 160 so it fills to the bottom of the screen
-    platforms.push({x: -100, y: h-FLOOR_OFFSET, w: levelWidth + 200, h: FLOOR_OFFSET, c: config.ground, type: 'floor'});
-
-    // Procedural Platforms
-    let cx = 300;
-    while(cx < levelWidth - 500) {
-        let gap = 60 + Math.random() * 80;
-        let pw = 120 + Math.random() * 150;
+        ctx.font = 'bold 50px Courier'; 
+        ctx.fillText("YOU WIN!", w/2, h/2 - 30);
         
-        // Height relative to the NEW floor
-        // Floor is at h-FLOOR_OFFSET.
-        // We want plats to be between 80px and 220px above that.
-        let ph = (h - FLOOR_OFFSET) - (80 + Math.random() * 140);
+        ctx.fillStyle = '#FFF'; 
+        ctx.font = '30px Courier'; 
+        ctx.fillText("Taha got his visa!", w/2, h/2 + 40);
         
-        if (Math.random() > 0.2) {
-            // Platform
-            platforms.push({x: cx, y: ph, w: pw, h: 20, c: config.accent, type: 'plat'});
-            
-            // Enemy - REDUCED PROBABILITY (was 0.4, now 0.7 for less enemies)
-            if (idx < 3 && Math.random() > 0.7) {
-                enemies.push({
-                    x: cx + 20, y: ph - 60, w: 40, h: 60, vx: 1, vy: 0, 
-                    patrolStart: cx, patrolEnd: cx + pw,
-                    type: idx === 0 ? 'gun' : (idx === 1 ? 'pizza' : 'croissant'),
-                    cooldown: Math.random() * 100
-                });
-            }
-        }
-        cx += pw + gap;
-    }
-
-    finishLineX = levelWidth - 200;
-
-    // Boss Level Setup
-    if (idx === 3) {
-        levelWidth = 1500;
-        finishLineX = levelWidth - 100;
-        
-        // Boss sits on the raised floor
-        let floorY = h - FLOOR_OFFSET;
-        
-        boss = {
-            x: 800, y: floorY - 90, w: 80, h: 90, vx: 0, vy: 0,
-            isBoss: true, timer: 0, facingRight: false, grounded: false
-        };
-        enemies.push(boss);
-        // Switch position adjusted
-        bossSwitch = { x: 1180, y: floorY - 60, w: 80, h: 60, active: true };
-        platforms.push({x: 1300, y: 0, w: 50, h: h, c: '#000', type: 'wall'}); 
+        ctx.font = '20px Courier'; 
+        ctx.fillStyle = '#888'; 
+        ctx.fillText("Welcome to London.", w/2, h/2 + 90);
     }
 }
 
-function update() {
-    if (currentState !== STATE_LEVEL) return;
-
-    // Player Physics
-    if (keys.left) { player.vx -= 1; player.facingRight = false; }
-    if (keys.right) { player.vx += 1; player.facingRight = true; }
-    player.vx *= FRICTION;
-    player.vy += GRAVITY;
-    player.x += player.vx;
-    player.y += player.vy;
-
-    // Collision
-    player.grounded = false;
-    platforms.forEach(p => {
-        if (player.x + player.w > p.x && player.x < p.x + p.w &&
-            player.y + player.h > p.y && player.y + player.h < p.y + p.h + 20 &&
-            player.vy >= 0) {
-                player.grounded = true;
-                player.vy = 0;
-                player.y = p.y - player.h;
-        }
-    });
-
-    if (player.y > h + 100) die();
-
-    // Camera
-    let targetCamX = player.x - w / 3;
-    if (targetCamX < 0) targetCamX = 0;
-    if (targetCamX > levelWidth - w) targetCamX = levelWidth - w;
-    camera.x += (targetCamX - camera.x) * 0.1;
-
-    // Enemies
-    enemies.forEach((e, i) => {
-        if (e.dead) return;
-        if (!e.isBoss) {
-            e.x += e.vx;
-            if (e.x < e.patrolStart || e.x > e.patrolEnd) e.vx *= -1;
-            e.facingRight = e.vx > 0;
-            e.cooldown++;
-            if (e.cooldown > 120 && Math.abs(player.x - e.x) < 600) {
-                e.cooldown = 0;
-                projectiles.push({
-                    x: e.x, y: e.y, vx: e.x < player.x ? 5 : -5, vy: e.type === 'gun' ? 0 : -6,
-                    type: e.type, life: 200
-                });
-                AudioSys.shoot();
-            }
-        } else if (e.isBoss) {
-            if (Math.abs(player.x - e.x) < 500) bossTriggered = true;
-            if (bossTriggered) {
-                e.timer++;
-                if (e.grounded && e.timer > 120) {
-                    e.vy = -BOSS_JUMP_FORCE; e.grounded = false; e.timer = 0; AudioSys.jump();
-                }
-                e.vy += GRAVITY; e.y += e.vy;
-                
-                // Floor collision for boss (using fixed floor height logic)
-                let floorY = h - FLOOR_OFFSET;
-                if (e.y > floorY - e.h) { e.y = floorY - e.h; e.vy = 0; e.grounded = true; }
-                
-                e.facingRight = player.x > e.x;
-            }
-        }
-
-        if (checkRectCollide(player, e)) {
-            if (!e.isBoss && player.vy > 0 && player.y + player.h - 10 < e.y + e.h/2) {
-                e.dead = true; player.vy = -8; AudioSys.hit(); enemies.splice(i, 1);
-            } else { die(); }
-        }
-    });
-
-    if (bossSwitch && bossSwitch.active && checkRectCollide(player, bossSwitch)) {
-        bossSwitch.active = false; boss.dead = true; enemies = enemies.filter(e => !e.isBoss);
-        AudioSys.win(); platforms.pop(); 
-    }
-
-    for (let i = projectiles.length - 1; i >= 0; i--) {
-        let p = projectiles[i];
-        p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--;
-        if (p.life <= 0) projectiles.splice(i, 1);
-        if (checkRectCollide(player, {x:p.x-5, y:p.y-5, w:10, h:10})) die();
-    }
-
-    if (player.x > finishLineX) nextLevel();
-}
-
-function checkRectCollide(r1, r2) {
-    return (r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y);
-}
-
-function die() {
-    if (player.dead) return;
-    player.dead = true;
-    AudioSys.playTone(100, 'sawtooth', 0.5);
-    setTimeout(() => { resetLevel(); }, 1000);
-}
-
-function nextLevel() {
-    AudioSys.win();
-    currentLevelIdx++;
-    if (currentLevelIdx >= 4) { currentState = STATE_VICTORY; } 
-    else { currentState = STATE_MAP; mapProgress = 0; }
-}
-
-function draw() {
-    ctx.clearRect(0, 0, w, h);
-
-    if (currentState === STATE_TITLE) {
-        ctx.fillStyle = "#222"; ctx.fillRect(0,0,w,h);
-        ctx.fillStyle = "white"; ctx.textAlign = "center";
-        ctx.font = "bold 40px Courier";
-        ctx.fillText("TAHA'S", w/2, h/2 - 60);
-        ctx.fillText("GREAT ADVENTURE", w/2, h/2 - 10);
-        ctx.font = "20px Courier";
-        ctx.fillText("Tap or Click to Start", w/2, h/2 + 60);
-        drawTaha(w/2 - 20, h/2 + 90, 40, 60, true);
-        return;
-    }
-
-    if (currentState === STATE_MAP) {
-        ctx.fillStyle = "#87CEEB"; ctx.fillRect(0,0,w,h);
-        
-        // Draw Better Map
-        ctx.fillStyle = "#E5E4E2";
-        ctx.strokeStyle = "#555";
-        ctx.lineWidth = 2;
-
-        // North Africa (Bottom)
-        ctx.beginPath();
-        ctx.moveTo(0, h); ctx.lineTo(0, h-100); 
-        ctx.lineTo(w*0.3, h-120); // Tunisia/Libya curve
-        ctx.lineTo(w, h-100); ctx.lineTo(w, h);
-        ctx.fill(); ctx.stroke();
-
-        // Italy (Boot Shape - roughly)
-        ctx.beginPath();
-        ctx.moveTo(w*0.4, h*0.6); // Sicily
-        ctx.lineTo(w*0.5, h*0.7); // Toe
-        ctx.lineTo(w*0.55, h*0.5); // Heel
-        ctx.lineTo(w*0.45, h*0.2); // North Italy
-        ctx.lineTo(w*0.35, h*0.3); // Alps border
-        ctx.fill(); ctx.stroke();
-
-        // France (Hexagon roughly)
-        ctx.beginPath();
-        ctx.moveTo(w*0.35, h*0.3); // Border with Italy
-        ctx.lineTo(w*0.2, h*0.4); // South coast
-        ctx.lineTo(w*0.1, h*0.2); // Atlantic
-        ctx.lineTo(w*0.25, h*0.05); // North coast
-        ctx.lineTo(w*0.45, h*0.2); // Border
-        ctx.fill(); ctx.stroke();
-
-        // UK (Island)
-        ctx.beginPath();
-        ctx.ellipse(w*0.25, h*0.05 - 30, 30, 20, 0, 0, Math.PI*2);
-        ctx.fill(); ctx.stroke();
-
-        const locs = [{x: w*0.2, y: h-110}, {x: w*0.45, y: h*0.5}, {x: w*0.25, y: h*0.2}, {x: w*0.25, y: h*0.05 - 30}];
-        
-        // Path
-        ctx.strokeStyle = "red"; ctx.setLineDash([10, 10]); ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(locs[0].x, locs[0].y);
-        for(let i=1; i<=currentLevelIdx; i++) ctx.lineTo(locs[i].x, locs[i].y);
-        ctx.stroke(); ctx.setLineDash([]);
-
-        mapProgress += 0.02;
-        if(mapProgress > 1) { resetLevel(); currentState = STATE_LEVEL; }
-
-        ctx.fillStyle = "red";
-        let start = locs[Math.max(0, currentLevelIdx-1)];
-        let end = locs[currentLevelIdx];
-        if (currentLevelIdx === 0) { start = locs[0]; end = locs[0]; mapProgress=1.1;} 
-        
-        let dx = start.x + (end.x - start.x) * mapProgress;
-        let dy = start.y + (end.y - start.y) * mapProgress;
-        ctx.beginPath(); ctx.arc(dx, dy, 8, 0, Math.PI*2); ctx.fill();
-        
-        ctx.fillStyle = "black"; ctx.font = "20px Courier"; ctx.textAlign = "center";
-        ctx.fillText(LEVELS[currentLevelIdx].name, w/2, h-30);
-        return;
-    }
-
-    if (currentState === STATE_VICTORY) {
-        ctx.fillStyle = "gold"; ctx.fillRect(0,0,w,h);
-        ctx.fillStyle = "black"; ctx.textAlign = "center";
-        ctx.font = "40px Courier"; ctx.fillText("YOU WIN!", w/2, h/2 - 20);
-        ctx.font = "20px Courier"; ctx.fillText("Taha reached London!", w/2, h/2 + 30);
-        ctx.font = "bold 24px Courier"; ctx.fillText("Taha got his visa!", w/2, h/2 + 60);
-        drawTaha(w/2 - 20, h/2 + 100, 40, 60, true);
-        return;
-    }
-
-    // --- GAMEPLAY RENDER ---
-    let config = LEVELS[currentLevelIdx];
+function drawMap() {
+    ctx.fillStyle = "#87CEEB"; ctx.fillRect(0,0,w,h);
     
-    // Sky
-    ctx.fillStyle = config.sky; 
-    ctx.fillRect(0,0,w,h);
+    // Map Shapes
+    ctx.fillStyle = "#E5E4E2"; ctx.strokeStyle = "#555"; ctx.lineWidth = 2;
+    // Africa
+    ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(0, h-100); ctx.lineTo(w*0.3, h-120); ctx.lineTo(w, h-100); ctx.lineTo(w, h); ctx.fill(); ctx.stroke();
+    // Italy
+    ctx.beginPath(); ctx.moveTo(w*0.4, h*0.6); ctx.lineTo(w*0.5, h*0.7); ctx.lineTo(w*0.55, h*0.5); ctx.lineTo(w*0.45, h*0.2); ctx.lineTo(w*0.35, h*0.3); ctx.fill(); ctx.stroke();
+    // France
+    ctx.beginPath(); ctx.moveTo(w*0.35, h*0.3); ctx.lineTo(w*0.2, h*0.4); ctx.lineTo(w*0.1, h*0.2); ctx.lineTo(w*0.25, h*0.05); ctx.lineTo(w*0.45, h*0.2); ctx.fill(); ctx.stroke();
+    // UK
+    ctx.beginPath(); ctx.ellipse(w*0.25, h*0.05 - 30, 30, 20, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
 
-    // Background Monuments
-    drawBackground(currentLevelIdx, camera.x);
-
-    ctx.save(); ctx.translate(-camera.x, 0);
+    const locs = [{x: w*0.2, y: h-110}, {x: w*0.45, y: h*0.5}, {x: w*0.25, y: h*0.2}, {x: w*0.25, y: h*0.05 - 30}];
     
-    // Platforms
-    platforms.forEach(p => {
-        ctx.fillStyle = p.c; 
-        ctx.fillRect(p.x, p.y, p.w, p.h);
-        ctx.strokeStyle = "rgba(0,0,0,0.3)"; 
-        ctx.lineWidth = 2;
-        ctx.strokeRect(p.x, p.y, p.w, p.h);
-        
-        // Draw Flag on the side of platforms for visual flair
-        if (p.type === 'plat' && p.w > 100) {
-            let cols = config.flag;
-            let fw = 30; let fh = 10;
-            ctx.fillStyle = cols[0]; ctx.fillRect(p.x+10, p.y+5, fw/3, fh);
-            ctx.fillStyle = cols[1]; ctx.fillRect(p.x+10+fw/3, p.y+5, fw/3, fh);
-            ctx.fillStyle = cols[2]; ctx.fillRect(p.x+10+2*fw/3, p.y+5, fw/3, fh);
-        }
-    });
+    // Path
+    ctx.strokeStyle = "red"; ctx.setLineDash([10, 10]); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(locs[0].x, locs[0].y);
+    for(let i=1; i<=currentLevelIdx; i++) ctx.lineTo(locs[i].x, locs[i].y);
+    ctx.stroke(); ctx.setLineDash([]);
 
-    if (bossSwitch && bossSwitch.active) {
-        // Draw VISA Box
-        ctx.fillStyle = "#1a1f71"; // Visa Blue
-        ctx.fillRect(bossSwitch.x, bossSwitch.y, bossSwitch.w, bossSwitch.h);
-        ctx.strokeStyle = "#f7b600"; // Gold border
-        ctx.lineWidth = 3;
-        ctx.strokeRect(bossSwitch.x, bossSwitch.y, bossSwitch.w, bossSwitch.h);
-        
-        ctx.fillStyle = "white";
-        ctx.font = "bold 20px Courier";
-        ctx.textAlign = "center";
-        ctx.fillText("VISA", bossSwitch.x + bossSwitch.w/2, bossSwitch.y + bossSwitch.h/2 + 8);
-        ctx.textAlign = "left"; // Reset alignment
-    }
-
-    // Finish Object (Boat)
-    let floorY = h - FLOOR_OFFSET;
-    ctx.fillStyle = "#8B4513"; ctx.fillRect(finishLineX, floorY-50, 100, 50);
-    ctx.fillStyle = "#FFF"; ctx.beginPath(); ctx.moveTo(finishLineX+50, floorY-50); ctx.lineTo(finishLineX+50, floorY-100); ctx.lineTo(finishLineX+90, floorY-70); ctx.fill();
-
-    if (!player.dead) drawTaha(player.x, player.y, player.w, player.h, player.facingRight);
-    enemies.forEach(e => { if (!e.dead) drawEnemy(e); });
-    projectiles.forEach(p => { drawProjectile(p); });
-    ctx.restore();
-
-    ctx.fillStyle = "black"; ctx.font = "20px Courier"; ctx.textAlign = "left";
-    ctx.fillText("Level " + (currentLevelIdx+1) + ": " + config.name, 20, 40);
+    // Dot
+    ctx.fillStyle = "red";
+    let start = locs[Math.max(0, currentLevelIdx-1)];
+    let end = locs[currentLevelIdx];
+    if(currentLevelIdx === 0) { start = locs[0]; end = locs[0]; mapProgress=1.1; }
+    
+    let dx = start.x + (end.x - start.x) * mapProgress;
+    let dy = start.y + (end.y - start.y) * mapProgress;
+    ctx.beginPath(); ctx.arc(dx, dy, 10, 0, Math.PI*2); ctx.fill();
+    
+    ctx.fillStyle = "black"; ctx.font = "20px Courier"; ctx.textAlign = "center";
+    ctx.fillText("TRAVELING TO " + LEVELS[currentLevelIdx].name + "...", w/2, h-30);
 }
 
-function loop() { update(); draw(); requestAnimationFrame(loop); }
+// --- LOOP ---
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+currentState = 0; // Title Screen
 loop();
 
 })();
